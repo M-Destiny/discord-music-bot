@@ -1,0 +1,8 @@
+preBuildCommand: npm install
+buildCommand: npm start
+startCommand: npm start
+envVars:
+  - key: NODE_VERSION
+    value: "18"
+  - key: DISCORD_TOKEN
+    sync: false

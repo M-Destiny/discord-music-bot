@@ -1,6 +1,5 @@
 import { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { Player } from 'discord-player';
-import { load } from '@discord-player/extractor';
 import { config } from 'dotenv';
 config();
 
@@ -20,11 +19,7 @@ const player = new Player(client, {
     },
 });
 
-const extractor = load();
-player.use(extractor);
-
 const prefix = '!';
-const queues = new Map();
 
 client.once('ready', () => {
     console.log(`🎵 Logged in as ${client.user.tag}`);
@@ -89,7 +84,6 @@ client.on('messageCreate', async (message) => {
         leaveOnEnd: true,
         leaveOnEmpty: true,
         leaveOnEmptyCooldown: 60000,
-        lagMonitor: 1000,
     });
 
     try {
@@ -183,7 +177,6 @@ async function handlePlay(message, args, queue, searchResult = null) {
             
             searchResult = await player.search(query, {
                 requestedBy: message.author,
-                searchEngine: 'auto',
             });
 
             if (!searchResult || !searchResult.tracks.length) {
@@ -426,7 +419,6 @@ async function handleSearch(message, args) {
 
     const result = await player.search(query, {
         requestedBy: message.author,
-        searchEngine: 'auto',
     });
 
     if (!result || !result.tracks.length) {
@@ -434,62 +426,48 @@ async function handleSearch(message, args) {
     }
 
     const tracks = result.tracks.slice(0, 10);
-    const options = tracks.map((track, i) => ({
-        label: `${i + 1}. ${track.title}`,
-        description: track.duration,
-        value: String(i),
-    }));
-
+    
     const embed = new EmbedBuilder()
         .setColor('#0099ff')
         .setTitle('🔍 Search Results')
         .setDescription(tracks.map((t, i) => `${i + 1}. **[${t.title}](${t.url})** - ${t.duration}`).join('\n'))
-        .setFooter({ text: 'Use the buttons to select a track' });
+        .setFooter({ text: 'Reply with a number to select a track (30s timeout)' });
 
-    const row = new ActionRowBuilder()
-        .addComponents(
-            tracks.slice(0, 5).map((track, i) => 
-                new ButtonBuilder()
-                    .setCustomId(`search_${i}`)
-                    .setLabel(`${i + 1}`)
-                    .setStyle(ButtonStyle.Primary)
-            )
-        );
+    const reply = await message.channel.send({ embeds: [embed] });
 
-    const reply = await message.channel.send({ embeds: [embed], components: [row] });
+    const filter = (m) => m.author.id === message.author.id && /^[1-5]$/.test(m.content);
+    
+    const collected = await message.channel.awaitMessages({ filter, max: 1, time: 30000 });
+    
+    if (!collected.size) {
+        return message.channel.send('❌ Selection timed out!');
+    }
 
-    const collector = reply.createMessageComponentCollector({
-        time: 30000,
+    const index = parseInt(collected.first().content) - 1;
+    const selectedTrack = tracks[index];
+
+    const voiceChannel = message.member.voice.channel;
+    if (!voiceChannel) {
+        return message.channel.send('❌ You must be in a voice channel!');
+    }
+
+    const queue = player.nodes.create(message.guild, {
+        metadata: {
+            channel: message.channel,
+            message: message,
+        },
+        selfDeaf: true,
+        volume: 80,
     });
 
-    collector.on('collect', async (interaction) => {
-        const index = parseInt(interaction.customId.split('_')[1]);
-        const selectedTrack = tracks[index];
+    await queue.connect(voiceChannel);
+    queue.addTrack(selectedTrack);
 
-        const voiceChannel = message.member.voice.channel;
-        if (!voiceChannel) {
-            return interaction.reply('❌ You must be in a voice channel!');
-        }
+    if (!queue.isPlaying()) {
+        await queue.node.play();
+    }
 
-        const queue = player.nodes.create(message.guild, {
-            metadata: {
-                channel: message.channel,
-                message: message,
-            },
-            selfDeaf: true,
-            volume: 80,
-        });
-
-        await queue.connect(voiceChannel);
-        queue.addTrack(selectedTrack);
-
-        if (!queue.isPlaying()) {
-            await queue.node.play();
-        }
-
-        await interaction.reply(`✅ Playing **${selectedTrack.title}**`);
-        collector.stop();
-    });
+    message.channel.send(`✅ Playing **${selectedTrack.title}**`);
 }
 
 function parseTime(timeStr) {
@@ -508,7 +486,7 @@ async function handleHelp(message) {
         .setTitle('🎵 Music Bot Commands')
         .setDescription('Here are all available commands:')
         .addFields(
-            { name: '`!play <query/url>`', value: 'Play a song or add to queue (supports YouTube, Spotify, Apple Music, SoundCloud)', inline: false },
+            { name: '`!play <query/url>`', value: 'Play a song or add to queue', inline: false },
             { name: '`!search <query>`', value: 'Search and select from results', inline: false },
             { name: '`!skip` or `!s`', value: 'Skip current track', inline: false },
             { name: '`!stop` or `!leave`', value: 'Stop and disconnect', inline: false },
@@ -524,7 +502,7 @@ async function handleHelp(message) {
             { name: '`!jump <number>`', value: 'Jump to track in queue', inline: false },
             { name: '`!clear`', value: 'Clear queue', inline: false },
         )
-        .setFooter({ text: 'Supports: YouTube, Spotify, Apple Music, SoundCloud, Bandcamp, Vimeo' });
+        .setFooter({ text: 'Supports: YouTube, Spotify, SoundCloud, and more' });
 
     message.channel.send({ embeds: [embed] });
 }
