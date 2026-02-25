@@ -508,3 +508,8 @@ async function handleHelp(message) {
 }
 
 client.login(process.env.DISCORD_TOKEN);
+
+// Keep-alive for Render free tier
+setInterval(() => {
+    console.log(`[Keep-alive] Bot is running - ${new Date().toISOString()}`);
+}, 60000);
