@@ -2,7 +2,7 @@ import express from 'express';
 import { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } from 'discord.js';
 import { Player } from 'discord-player';
 import { config } from 'dotenv';
-import fetch from 'node-fetch';
+const fetch = globalThis.fetch;
 config();
 
 const app = express();
