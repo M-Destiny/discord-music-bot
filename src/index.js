@@ -1,7 +1,23 @@
+import express from 'express';
 import { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { Player } from 'discord-player';
 import { config } from 'dotenv';
 config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('🎵 Discord Music Bot is running!');
+});
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 Web server running on port ${PORT}`);
+});
 
 const client = new Client({
     intents: [
@@ -509,7 +525,7 @@ async function handleHelp(message) {
 
 client.login(process.env.DISCORD_TOKEN);
 
-// Keep-alive for Render free tier
+// Keep-alive
 setInterval(() => {
-    console.log(`[Keep-alive] Bot is running - ${new Date().toISOString()}`);
+    console.log(`[Keep-alive] Bot running - ${new Date().toISOString()}`);
 }, 60000);
